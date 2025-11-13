@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accelerometer Ball Game</title>
+<style>
+    body { margin:0; overflow:hidden; background:#111; color:#fff; font-family:sans-serif; }
+    canvas { display:block; margin:0 auto; background:#222; border:2px solid #fff; }
+    #score { position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:1.5rem; }
+</style>
+</head>
+<body>
+
+<div id="score">Score: 0</div>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const ball = { x: canvas.width/2, y: canvas.height-50, radius:20, vx:0, vy:0 };
+const obstacles = [];
+let score = 0;
+let level = 1;
+let gameOver = false;
+
+const sensitivity = 0.5;
+let obstacleSpeed = 2;
+let obstacleFrequency = 90; // frames
+
+// Handle device tilt
+window.addEventListener('deviceorientation', (event) => {
+    let tiltX = event.gamma; // -90 to 90
+    if (tiltX != null) ball.vx = tiltX * sensitivity;
+});
+
+// Create obstacles
+function spawnObstacle() {
+    const width = Math.random() * 80 + 40;
+    const x = Math.random() * (canvas.width - width);
+    obstacles.push({ x, y: -20, width, height: 20 });
+}
+
+// Collision detection
+function checkCollision(rect) {
+    const distX = Math.abs(ball.x - (rect.x + rect.width/2));
+    const distY = Math.abs(ball.y - (rect.y + rect.height/2));
+
+    if (distX > (rect.width/2 + ball.radius)) return false;
+    if (distY > (rect.height/2 + ball.radius)) return false;
+
+    if (distX <= rect.width/2) return true;
+    if (distY <= rect.height/2) return true;
+
+    const dx = distX - rect.width/2;
+    const dy = distY - rect.height/2;
+    return (dx*dx + dy*dy <= ball.radius*ball.radius);
+}
+
+// Game loop
+let frameCount = 0;
+function update() {
+    if (gameOver) return drawGameOver();
+
+    frameCount++;
+    // Move ball
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // Keep inside canvas
+    if (ball.x - ball.radius < 0) { ball.x = ball.radius; ball.vx = 0; }
+    if (ball.x + ball.radius > canvas.width) { ball.x = canvas.width - ball.radius; ball.vx = 0; }
+
+    // Spawn obstacles
+    if (frameCount % obstacleFrequency === 0) spawnObstacle();
+
+    // Move obstacles
+    obstacles.forEach(ob => ob.y += obstacleSpeed);
+
+    // Remove offscreen obstacles
+    for (let i = obstacles.length-1; i>=0; i--) {
+        if (obstacles[i].y > canvas.height) {
+            obstacles.splice(i,1);
+            score += 1;
+            document.getElementById('score').textContent = `Score: ${score}`;
+            // Increase difficulty every 10 points
+            if (score % 10 === 0) {
+                level++;
+                obstacleSpeed += 0.5;
+                if (obstacleFrequency > 30) obstacleFrequency -= 5;
+            }
+        }
+    }
+
+    // Check collisions
+    for (let ob of obstacles) {
+        if (checkCollision(ob)) {
+            gameOver = true;
+        }
+    }
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Draw ball
+    ctx.fillStyle = 'cyan';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+    ctx.fill();
+
+    // Draw obstacles
+    ctx.fillStyle = 'tomato';
+    obstacles.forEach(ob => {
+        ctx.fillRect(ob.x, ob.y, ob.width, ob.height);
+    });
+
+    // Draw level
+    ctx.fillStyle = '#fff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`Level: ${level}`, 10, 20);
+}
+
+function drawGameOver() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = 'red';
+    ctx.font = '36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 20);
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px sans-serif';
+    ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 20);
+}
+
+update();
+</script>
+
+</body>
+</html>
