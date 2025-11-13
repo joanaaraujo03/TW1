@@ -3,37 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Accelerometer Ball Game</title>
+<title>Phone Tilt Ball Game</title>
 <style>
     body { margin:0; overflow:hidden; background:#111; color:#fff; font-family:sans-serif; }
     canvas { display:block; margin:0 auto; background:#222; border:2px solid #fff; }
     #score { position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:1.5rem; }
+    #level { position:absolute; top:40px; left:50%; transform:translateX(-50%); font-size:1.2rem; color:#ccc; }
+    #permissionButton { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); padding:12px 24px; font-size:18px; background:#6c63ff; color:#fff; border:none; border-radius:10px; }
 </style>
 </head>
 <body>
 
 <div id="score">Score: 0</div>
+<div id="level">Level: 1</div>
 <canvas id="gameCanvas" width="400" height="600"></canvas>
+<button id="permissionButton" style="display:none;">Enable Motion</button>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const ball = { x: canvas.width/2, y: canvas.height-50, radius:20, vx:0, vy:0 };
+const ball = { x: canvas.width/2, y: canvas.height-50, radius:20, vx:0 };
 const obstacles = [];
 let score = 0;
 let level = 1;
 let gameOver = false;
 
-const sensitivity = 0.5;
+let sensitivity = 0.5;
 let obstacleSpeed = 2;
 let obstacleFrequency = 90; // frames
+let frameCount = 0;
 
-// Handle device tilt
-window.addEventListener('deviceorientation', (event) => {
-    let tiltX = event.gamma; // -90 to 90
-    if (tiltX != null) ball.vx = tiltX * sensitivity;
-});
+// Detect iOS 13+ for motion permission
+const permissionButton = document.getElementById('permissionButton');
+if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    permissionButton.style.display = 'block';
+    permissionButton.addEventListener('click', () => {
+        DeviceMotionEvent.requestPermission()
+            .then(response => {
+                if (response === 'granted') {
+                    permissionButton.style.display = 'none';
+                    window.addEventListener('deviceorientation', handleOrientation);
+                } else {
+                    alert('Permissão de sensores recusada!');
+                }
+            })
+            .catch(console.error);
+    });
+} else {
+    // Non-iOS devices
+    window.addEventListener('deviceorientation', handleOrientation);
+}
+
+function handleOrientation(event) {
+    if (event.gamma != null) {
+        ball.vx = event.gamma * sensitivity;
+    }
+}
 
 // Create obstacles
 function spawnObstacle() {
@@ -59,14 +85,13 @@ function checkCollision(rect) {
 }
 
 // Game loop
-let frameCount = 0;
 function update() {
     if (gameOver) return drawGameOver();
 
     frameCount++;
+
     // Move ball
     ball.x += ball.vx;
-    ball.y += ball.vy;
 
     // Keep inside canvas
     if (ball.x - ball.radius < 0) { ball.x = ball.radius; ball.vx = 0; }
@@ -82,13 +107,15 @@ function update() {
     for (let i = obstacles.length-1; i>=0; i--) {
         if (obstacles[i].y > canvas.height) {
             obstacles.splice(i,1);
-            score += 1;
+            score++;
             document.getElementById('score').textContent = `Score: ${score}`;
-            // Increase difficulty every 10 points
+
+            // Increase difficulty
             if (score % 10 === 0) {
                 level++;
                 obstacleSpeed += 0.5;
                 if (obstacleFrequency > 30) obstacleFrequency -= 5;
+                document.getElementById('level').textContent = `Level: ${level}`;
             }
         }
     }
@@ -118,11 +145,6 @@ function draw() {
     obstacles.forEach(ob => {
         ctx.fillRect(ob.x, ob.y, ob.width, ob.height);
     });
-
-    // Draw level
-    ctx.fillStyle = '#fff';
-    ctx.font = '16px sans-serif';
-    ctx.fillText(`Level: ${level}`, 10, 20);
 }
 
 function drawGameOver() {
